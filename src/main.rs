@@ -6,6 +6,7 @@ use clap::Parser;
 use colored::Colorize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use parse::{group_by_series, DicomInfo};
 use scan::scan_directory;
@@ -18,7 +19,7 @@ struct Cli {
     search: Option<String>,
 }
 
-fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
+fn print_results(groups: HashMap<Arc<str>, Vec<DicomInfo>>) {
     if groups.is_empty() {
         println!("No DICOM files found.");
         return;
@@ -42,7 +43,7 @@ fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
     }
 }
 
-fn print_filtered_results(matches: Vec<(String, Vec<DicomInfo>, u32)>) {
+fn print_filtered_results(matches: Vec<(Arc<str>, Vec<DicomInfo>, u32)>) {
     if matches.is_empty() {
         println!("No matching series found.");
         return;

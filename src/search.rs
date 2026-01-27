@@ -1,17 +1,18 @@
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::parse::DicomInfo;
 
 pub fn fuzzy_filter_series(
-    groups: HashMap<String, Vec<DicomInfo>>,
+    groups: HashMap<Arc<str>, Vec<DicomInfo>>,
     pattern: &str,
-) -> Vec<(String, Vec<DicomInfo>, u32)> {
+) -> Vec<(Arc<str>, Vec<DicomInfo>, u32)> {
     let mut matcher = Matcher::new(Config::DEFAULT);
     let pattern = Pattern::parse(pattern, CaseMatching::Ignore, Normalization::Smart);
 
-    let mut matches: Vec<(String, Vec<DicomInfo>, u32)> = groups
+    let mut matches: Vec<(Arc<str>, Vec<DicomInfo>, u32)> = groups
         .into_iter()
         .filter_map(|(description, files)| {
             let mut buf = Vec::new();
