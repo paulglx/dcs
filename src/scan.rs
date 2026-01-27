@@ -1,7 +1,7 @@
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use jwalk::WalkDir;
 use rayon::prelude::*;
 use std::path::PathBuf;
-use walkdir::WalkDir;
 
 use crate::parse::{extract_tags, DicomInfo};
 

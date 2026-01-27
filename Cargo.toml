@@ -9,5 +9,5 @@ colored = "2"
 dicom = "0.8"
 indicatif = { version = "0.17", features = ["rayon"] }
 rayon = "1.10"
-walkdir = "2"
+jwalk = "0.8"
 nucleo-matcher = "0.3"
