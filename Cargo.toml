@@ -9,3 +9,4 @@ dicom = "0.8"
 indicatif = { version = "0.17", features = ["rayon"] }
 rayon = "1.10"
 walkdir = "2"
+nucleo-matcher = "0.3"

@@ -3,6 +3,8 @@ use dicom::core::Tag;
 use dicom::dictionary_std::tags::PIXEL_DATA;
 use dicom::object::OpenFileOptions;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,6 +16,9 @@ use walkdir::WalkDir;
 struct Cli {
     /// Directory to scan for DICOM files
     directory: PathBuf,
+
+    /// Fuzzy search pattern to filter series descriptions
+    search: Option<String>,
 }
 
 /// Information extracted from a DICOM file
@@ -88,6 +93,31 @@ fn group_by_series(files: Vec<DicomInfo>) -> HashMap<String, Vec<DicomInfo>> {
     groups
 }
 
+/// Filter series by fuzzy matching against the pattern, returning matches sorted by score
+fn fuzzy_filter_series(
+    groups: HashMap<String, Vec<DicomInfo>>,
+    pattern: &str,
+) -> Vec<(String, Vec<DicomInfo>, u32)> {
+    let mut matcher = Matcher::new(Config::DEFAULT);
+    let pattern = Pattern::parse(pattern, CaseMatching::Ignore, Normalization::Smart);
+
+    let mut matches: Vec<(String, Vec<DicomInfo>, u32)> = groups
+        .into_iter()
+        .filter_map(|(description, files)| {
+            let mut buf = Vec::new();
+            let haystack = nucleo_matcher::Utf32Str::new(&description, &mut buf);
+            pattern
+                .score(haystack, &mut matcher)
+                .map(|score| (description, files, score))
+        })
+        .collect();
+
+    // Sort by score descending (best matches first)
+    matches.sort_by(|a, b| b.2.cmp(&a.2));
+
+    matches
+}
+
 /// Print the grouped results
 fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
     if groups.is_empty() {
@@ -99,6 +129,29 @@ fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
     series_list.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (series_desc, mut files) in series_list {
+        // Sort files by path to get consistent "first" file
+        files.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+
+        let first = &files[0];
+
+        println!("Series: {}", series_desc);
+        println!(
+            "  Files: {} (first: {})",
+            files.len(),
+            first.file_path.display()
+        );
+        println!();
+    }
+}
+
+/// Print filtered results with match scores
+fn print_filtered_results(matches: Vec<(String, Vec<DicomInfo>, u32)>) {
+    if matches.is_empty() {
+        println!("No matching series found.");
+        return;
+    }
+
+    for (series_desc, mut files, _) in matches {
         // Sort files by path to get consistent "first" file
         files.sort_by(|a, b| a.file_path.cmp(&b.file_path));
 
@@ -135,5 +188,11 @@ fn main() {
 
     let files = scan_directory(&cli.directory);
     let groups = group_by_series(files);
-    print_results(groups);
+
+    if let Some(ref pattern) = cli.search {
+        let matches = fuzzy_filter_series(groups, pattern);
+        print_filtered_results(matches);
+    } else {
+        print_results(groups);
+    }
 }
