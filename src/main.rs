@@ -1,8 +1,11 @@
 use clap::Parser;
-use dicom::object::open_file;
-use indicatif::{ProgressBar, ProgressStyle};
+use dicom::core::Tag;
+use dicom::dictionary_std::tags::PIXEL_DATA;
+use dicom::object::OpenFileOptions;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// DICOM Search CLI Tool - Search and group DICOM files by series
@@ -16,90 +19,58 @@ struct Cli {
 /// Information extracted from a DICOM file
 #[derive(Debug, Clone)]
 struct DicomInfo {
-    patient_id: String,
     series_description: String,
-    study_description: String,
     file_path: PathBuf,
 }
 
 /// Scan a directory recursively for DICOM files and extract their metadata
 fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
-    // First pass: count total files
-    let total_files = WalkDir::new(dir)
+    // Single pass: collect all file paths
+    let file_paths: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .count() as u64;
+        .map(|e| e.into_path())
+        .collect();
 
     // Create progress bar
-    let pb = ProgressBar::new(total_files);
+    let pb = ProgressBar::new(file_paths.len() as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("[{bar:40.cyan/blue}] {pos}/{len} {msg}")
+            .template("[{bar:40.cyan/blue}] {pos}/{len}")
             .expect("Invalid progress bar template")
             .progress_chars("█░"),
     );
 
-    let mut results = Vec::new();
-
-    // Second pass: process files with progress bar
-    for entry in WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        let path = entry.path().to_path_buf();
-        
-        // Update progress bar with current filename
-        if let Some(filename) = path.file_name() {
-            pb.set_message(filename.to_string_lossy().to_string());
-        }
-
-        if let Some(info) = extract_tags(path) {
-            results.push(info);
-        }
-
-        pb.inc(1);
-    }
-
-    pb.finish_and_clear();
+    // Process files in parallel with progress tracking
+    let results: Vec<DicomInfo> = file_paths
+        .par_iter()
+        .progress_with(pb)
+        .filter_map(|path| extract_tags(path))
+        .collect();
 
     results
 }
 
-/// Extract DICOM tags from a file
-fn extract_tags(file_path: PathBuf) -> Option<DicomInfo> {
-    let obj = open_file(&file_path).ok()?;
-
-    // PatientID (0010,0020)
-    let patient_id = obj
-        .element_by_name("PatientID")
-        .ok()
-        .and_then(|e| e.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "Unknown".to_string());
+/// Extract DICOM tags from a file (reads only up to pixel data)
+fn extract_tags(file_path: &Path) -> Option<DicomInfo> {
+    let obj = OpenFileOptions::new()
+        .read_until(PIXEL_DATA)
+        .open_file(file_path)
+        .ok()?;
 
     // SeriesDescription (0008,103E)
+    const SERIES_DESCRIPTION: Tag = Tag(0x0008, 0x103E);
     let series_description = obj
-        .element_by_name("SeriesDescription")
-        .ok()
-        .and_then(|e| e.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    // StudyDescription (0008,1030)
-    let study_description = obj
-        .element_by_name("StudyDescription")
+        .element(SERIES_DESCRIPTION)
         .ok()
         .and_then(|e| e.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| "Unknown".to_string());
 
     Some(DicomInfo {
-        patient_id,
         series_description,
-        study_description,
-        file_path,
+        file_path: file_path.to_path_buf(),
     })
 }
 
@@ -131,15 +102,14 @@ fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
         // Sort files by path to get consistent "first" file
         files.sort_by(|a, b| a.file_path.cmp(&b.file_path));
 
-        // Get patient and study info from the first file
         let first = &files[0];
-        let patient_id = &first.patient_id;
-        let study_description = &first.study_description;
 
         println!("Series: {}", series_desc);
-        println!("  Patient ID: {}", patient_id);
-        println!("  Study: {}", study_description);
-        println!("  Files: {} (first: {})", files.len(), first.file_path.display());
+        println!(
+            "  Files: {} (first: {})",
+            files.len(),
+            first.file_path.display()
+        );
         println!();
     }
 }
@@ -148,7 +118,10 @@ fn main() {
     let cli = Cli::parse();
 
     if !cli.directory.exists() {
-        eprintln!("Error: Directory '{}' does not exist", cli.directory.display());
+        eprintln!(
+            "Error: Directory '{}' does not exist",
+            cli.directory.display()
+        );
         std::process::exit(1);
     }
 
