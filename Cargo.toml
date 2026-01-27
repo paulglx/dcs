@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 dicom = "0.8"
+indicatif = "0.17"
 walkdir = "2"

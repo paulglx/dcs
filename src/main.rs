@@ -1,5 +1,6 @@
 use clap::Parser;
 use dicom::object::open_file;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -23,17 +24,45 @@ struct DicomInfo {
 
 /// Scan a directory recursively for DICOM files and extract their metadata
 fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
+    // First pass: count total files
+    let total_files = WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .count() as u64;
+
+    // Create progress bar
+    let pb = ProgressBar::new(total_files);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{bar:40.cyan/blue}] {pos}/{len} {msg}")
+            .expect("Invalid progress bar template")
+            .progress_chars("█░"),
+    );
+
     let mut results = Vec::new();
 
+    // Second pass: process files with progress bar
     for entry in WalkDir::new(dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
     {
-        if let Some(info) = extract_tags(entry.path().to_path_buf()) {
+        let path = entry.path().to_path_buf();
+        
+        // Update progress bar with current filename
+        if let Some(filename) = path.file_name() {
+            pb.set_message(filename.to_string_lossy().to_string());
+        }
+
+        if let Some(info) = extract_tags(path) {
             results.push(info);
         }
+
+        pb.inc(1);
     }
+
+    pb.finish_and_clear();
 
     results
 }
