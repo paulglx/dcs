@@ -3,7 +3,7 @@ use jwalk::WalkDir;
 use rayon::prelude::*;
 use std::path::PathBuf;
 
-use crate::parse::{extract_tags, has_dicom_preamble, DicomInfo};
+use crate::parse::{extract_tags, DicomInfo};
 
 pub fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
     let file_paths: Vec<PathBuf> = WalkDir::new(dir)
@@ -11,7 +11,6 @@ pub fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .map(|e| e.path())
-        .filter(|p| has_dicom_preamble(p))
         .collect();
 
     let pb = ProgressBar::new(file_paths.len() as u64);

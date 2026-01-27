@@ -9,7 +9,7 @@ pub const SERIES_DESCRIPTION: Tag = Tag(0x0008, 0x103E);
 // Tag after SERIES_DESCRIPTION to ensure it gets read (read_until is exclusive)
 const SERIES_DESCRIPTION_NEXT: Tag = Tag(0x0008, 0x103F);
 
-pub fn has_dicom_preamble(path: &Path) -> bool {
+fn has_dicom_preamble(path: &Path) -> bool {
     let Ok(mut file) = File::open(path) else {
         return false;
     };
@@ -27,6 +27,10 @@ pub struct DicomInfo {
 }
 
 pub fn extract_tags(file_path: &Path) -> Option<DicomInfo> {
+    if !has_dicom_preamble(file_path) {
+        return None;
+    }
+
     let obj = OpenFileOptions::new()
         .read_until(SERIES_DESCRIPTION_NEXT)
         .open_file(file_path)
