@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+colored = "2"
 dicom = "0.8"
 indicatif = { version = "0.17", features = ["rayon"] }
 rayon = "1.10"

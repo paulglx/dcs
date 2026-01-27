@@ -1,4 +1,5 @@
 use clap::Parser;
+use colored::Colorize;
 use dicom::core::Tag;
 use dicom::dictionary_std::tags::PIXEL_DATA;
 use dicom::object::OpenFileOptions;
@@ -134,7 +135,7 @@ fn print_results(groups: HashMap<String, Vec<DicomInfo>>) {
 
         let first = &files[0];
 
-        println!("Series: {}", series_desc);
+        println!("Series: {}", series_desc.bold().blue());
         println!(
             "  Files: {} (first: {})",
             files.len(),
@@ -157,7 +158,7 @@ fn print_filtered_results(matches: Vec<(String, Vec<DicomInfo>, u32)>) {
 
         let first = &files[0];
 
-        println!("Series: {}", series_desc);
+        println!("Series: {}", series_desc.bold().blue());
         println!(
             "  Files: {} (first: {})",
             files.len(),
