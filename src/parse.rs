@@ -1,10 +1,24 @@
 use dicom::core::Tag;
-use dicom::dictionary_std::tags::PIXEL_DATA;
 use dicom::object::OpenFileOptions;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 pub const SERIES_DESCRIPTION: Tag = Tag(0x0008, 0x103E);
+// Tag after SERIES_DESCRIPTION to ensure it gets read (read_until is exclusive)
+const SERIES_DESCRIPTION_NEXT: Tag = Tag(0x0008, 0x103F);
+
+pub fn has_dicom_preamble(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut buf = [0u8; 132];
+    if file.read_exact(&mut buf).is_err() {
+        return false;
+    };
+    &buf[128..132] == b"DICM"
+}
 
 #[derive(Debug, Clone)]
 pub struct DicomInfo {
@@ -14,7 +28,7 @@ pub struct DicomInfo {
 
 pub fn extract_tags(file_path: &Path) -> Option<DicomInfo> {
     let obj = OpenFileOptions::new()
-        .read_until(PIXEL_DATA)
+        .read_until(SERIES_DESCRIPTION_NEXT)
         .open_file(file_path)
         .ok()?;
 
