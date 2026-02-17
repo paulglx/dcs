@@ -1,3 +1,4 @@
+use dicom::core::Tag;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use jwalk::WalkDir;
 use rayon::prelude::*;
@@ -5,7 +6,7 @@ use std::path::PathBuf;
 
 use crate::parse::{extract_tags, DicomInfo};
 
-pub fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
+pub fn scan_directory(dir: &PathBuf, extra_tag: Option<Tag>) -> Vec<DicomInfo> {
     let file_paths: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
         .filter_map(|e| e.ok())
@@ -24,7 +25,7 @@ pub fn scan_directory(dir: &PathBuf) -> Vec<DicomInfo> {
     let results: Vec<DicomInfo> = file_paths
         .par_iter()
         .progress_with(pb)
-        .filter_map(|path| extract_tags(path))
+        .filter_map(|path| extract_tags(path, extra_tag))
         .collect();
 
     results

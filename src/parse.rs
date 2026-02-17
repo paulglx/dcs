@@ -25,15 +25,21 @@ fn has_dicom_preamble(path: &Path) -> bool {
 pub struct DicomInfo {
     pub series_description: Arc<str>,
     pub file_path: std::path::PathBuf,
+    pub extra_tag_value: Option<String>,
 }
 
-pub fn extract_tags(file_path: &Path) -> Option<DicomInfo> {
+pub fn extract_tags(file_path: &Path, extra_tag: Option<Tag>) -> Option<DicomInfo> {
     if !has_dicom_preamble(file_path) {
         return None;
     }
 
+    let read_until = match extra_tag {
+        Some(t) => std::cmp::max(SERIES_DESCRIPTION_NEXT, Tag(t.group(), t.element() + 1)),
+        None => SERIES_DESCRIPTION_NEXT,
+    };
+
     let obj = OpenFileOptions::new()
-        .read_until(SERIES_DESCRIPTION_NEXT)
+        .read_until(read_until)
         .open_file(file_path)
         .ok()?;
 
@@ -44,9 +50,16 @@ pub fn extract_tags(file_path: &Path) -> Option<DicomInfo> {
         .map(|s| Arc::from(s.as_ref()))
         .unwrap_or_else(|| Arc::from("Unknown"));
 
+    let extra_tag_value = extra_tag.and_then(|t| {
+        obj.element(t)
+            .ok()
+            .and_then(|e| e.to_str().ok().map(|s| s.to_string()))
+    });
+
     Some(DicomInfo {
         series_description,
         file_path: file_path.to_path_buf(),
+        extra_tag_value,
     })
 }
 
