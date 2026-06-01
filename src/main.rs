@@ -44,15 +44,23 @@ fn print_tag_values(files: &[DicomInfo], tag: Tag) {
         .filter_map(|f| f.extra_tag_value.as_deref())
         .collect();
     if !values.is_empty() {
+        let count = values.len();
+        let joined = values
+            .into_iter()
+            .map(|v| v.truecolor(255, 165, 0).to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let suffix = if count >= 3 {
+            format!(" {}", format!("({} distinct)", count).dimmed())
+        } else {
+            String::new()
+        };
         println!(
-            "  Tag ({:04X},{:04X}): {}",
+            "  Tag ({:04X},{:04X}): {}{}",
             tag.group(),
             tag.element(),
-            values
-                .into_iter()
-                .map(|v| v.truecolor(255, 165, 0).to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
+            joined,
+            suffix
         );
     }
 }
